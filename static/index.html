@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>WebhookRelay - Inspect & Replay Webhooks</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/styles.css">
+	<script>
+		tailwind.config = {
+			theme: {
+				extend: {
+					colors: {
+						zinc: {
+							850: '#1f1f23',
+							950: '#09090b',
+						}
+					},
+					fontFamily: {
+						sans: ['Inter', 'system-ui', 'sans-serif'],
+						mono: ['JetBrains Mono', 'monospace'],
+					}
+				}
+			}
+		}
+	</script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen flex flex-col">
+
+	<!-- Top Bar -->
+	<header class="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
+		<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<div class="flex items-center gap-2">
+					<svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+						<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+					</svg>
+					<span class="font-semibold text-base tracking-tight">WebhookRelay</span>
+				</div>
+				<div class="hidden sm:flex items-center gap-1.5 ml-3 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800">
+					<span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+					<span id="status-text" class="text-xs text-zinc-400">Connecting...</span>
+				</div>
+			</div>
+			<div class="flex items-center gap-2">
+				<button onclick="app.showStats()" class="p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-zinc-200" title="System Status">
+					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+					</svg>
+				</button>
+				<button onclick="app.createEndpoint()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 rounded-lg text-sm font-medium transition-all">
+					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+						<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+					</svg>
+					New Endpoint
+				</button>
+			</div>
+		</div>
+	</header>
+
+	<!-- Main Layout -->
+	<div class="flex-1 flex max-w-screen-2xl mx-auto w-full">
+
+		<!-- Sidebar -->
+		<aside id="sidebar" class="w-64 border-r border-zinc-800 flex-shrink-0 hidden lg:flex flex-col">
+			<div class="p-3 border-b border-zinc-800">
+				<h2 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Endpoints</h2>
+			</div>
+			<div id="endpoint-list" class="flex-1 overflow-y-auto p-2 space-y-0.5">
+				<!-- Endpoint items rendered here -->
+			</div>
+		</aside>
+
+		<!-- Main Content -->
+		<main class="flex-1 overflow-hidden flex flex-col min-w-0">
+
+			<!-- Hero (shown when no endpoints) -->
+			<div id="hero-section" class="flex-1 flex items-center justify-center p-8">
+				<div class="text-center max-w-lg">
+					<div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-6">
+						<svg class="w-8 h-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+							<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+						</svg>
+					</div>
+					<h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Inspect webhooks in real-time</h1>
+					<p class="text-zinc-400 text-lg mb-8 leading-relaxed">Deploy your own webhook debugging tool in seconds. Catch, inspect, and replay HTTP requests.</p>
+					<button onclick="app.createEndpoint()" class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-xl transition-all text-sm shadow-lg shadow-emerald-500/20">
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+							<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+						</svg>
+						Create Your First Endpoint
+					</button>
+				</div>
+			</div>
+
+			<!-- Endpoint Detail (hidden initially) -->
+			<div id="endpoint-detail" class="flex-1 flex flex-col overflow-hidden hidden">
+
+				<!-- Endpoint Header -->
+				<div class="border-b border-zinc-800 p-4 sm:p-6">
+					<div class="flex items-start justify-between gap-4 mb-4">
+						<div class="min-w-0">
+							<h2 id="endpoint-name" class="text-lg font-semibold truncate"></h2>
+							<p class="text-xs text-zinc-500 mt-0.5">Created <span id="endpoint-created"></span></p>
+						</div>
+						<div class="flex items-center gap-2 flex-shrink-0">
+							<button onclick="app.sendTestWebhook()" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border border-blue-500/20 rounded-lg text-xs font-medium transition-all">
+								<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+									<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+								</svg>
+								Send Test Webhook
+							</button>
+							<button onclick="app.deleteCurrentEndpoint()" class="p-1.5 rounded-lg hover:bg-red-500/15 text-zinc-500 hover:text-red-400 transition-all" title="Delete endpoint">
+								<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+								</svg>
+							</button>
+						</div>
+					</div>
+
+					<!-- Webhook URL -->
+					<div class="flex items-center gap-2 p-3 bg-zinc-900 rounded-xl border border-zinc-800">
+						<code id="webhook-url" class="flex-1 text-sm font-mono text-emerald-400 truncate"></code>
+						<button onclick="app.copyWebhookURL()" class="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0" title="Copy URL">
+							<svg id="copy-icon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+							</svg>
+							<svg id="check-icon" class="w-4 h-4 hidden text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="20 6 9 17 4 12"/>
+							</svg>
+						</button>
+					</div>
+
+					<!-- curl example -->
+					<details class="mt-3 group">
+						<summary class="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors select-none">Show curl command</summary>
+						<pre id="curl-command" class="mt-2 p-3 bg-zinc-900 rounded-xl border border-zinc-800 text-xs font-mono text-zinc-300 overflow-x-auto whitespace-pre-wrap"></pre>
+					</details>
+
+					<!-- Request counter -->
+					<div class="flex items-center gap-4 mt-4">
+						<div class="flex items-center gap-1.5 text-sm">
+							<svg class="w-4 h-4 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+							</svg>
+							<span class="text-zinc-400"><span id="request-count" class="text-zinc-200 font-semibold">0</span> requests</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Request List -->
+				<div id="request-list" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2">
+					<div id="empty-requests" class="flex flex-col items-center justify-center py-16 text-center">
+						<div class="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+							<svg class="w-6 h-6 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+								<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+							</svg>
+						</div>
+						<p class="text-zinc-500 text-sm">Waiting for webhooks...</p>
+						<p class="text-zinc-600 text-xs mt-1">Send a request to the URL above or click "Send Test Webhook"</p>
+					</div>
+				</div>
+
+			</div>
+		</main>
+	</div>
+
+	<!-- Footer -->
+	<footer class="border-t border-zinc-800 bg-zinc-950">
+		<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 h-10 flex items-center justify-between text-xs text-zinc-600">
+			<div class="flex items-center gap-3">
+				<span>Deployed on <a href="https://azin.run" target="_blank" class="text-zinc-400 hover:text-zinc-200 transition-colors">Azin</a></span>
+			</div>
+			<div class="flex items-center gap-1.5">
+				<span class="w-1.5 h-1.5 rounded-full bg-emerald-500/60"></span>
+				<span>Uptime: <span id="uptime-counter">0s</span></span>
+			</div>
+		</div>
+	</footer>
+
+	<!-- Stats Modal -->
+	<div id="stats-modal" class="fixed inset-0 z-[100] hidden">
+		<div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="app.closeStats()"></div>
+		<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md">
+			<div class="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
+				<div class="flex items-center justify-between p-5 border-b border-zinc-800">
+					<h3 class="font-semibold">System Status</h3>
+					<button onclick="app.closeStats()" class="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400">
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+					</button>
+				</div>
+				<div id="stats-content" class="p-5 space-y-3">
+					<div class="text-center py-4 text-zinc-500 text-sm">Loading...</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Replay Modal -->
+	<div id="replay-modal" class="fixed inset-0 z-[100] hidden">
+		<div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="app.closeReplay()"></div>
+		<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg">
+			<div class="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
+				<div class="flex items-center justify-between p-5 border-b border-zinc-800">
+					<h3 class="font-semibold">Replay Webhook</h3>
+					<button onclick="app.closeReplay()" class="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400">
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+					</button>
+				</div>
+				<div class="p-5 space-y-4">
+					<div>
+						<label class="block text-sm text-zinc-400 mb-1.5">Target URL</label>
+						<input id="replay-url" type="url" placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20">
+					</div>
+					<button onclick="app.executeReplay()" class="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-lg text-sm transition-all">
+						Send Replay
+					</button>
+					<div id="replay-result" class="hidden">
+						<div class="p-3 bg-zinc-800 rounded-lg border border-zinc-700">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-xs text-zinc-400">Response</span>
+								<span id="replay-status" class="text-xs font-mono font-semibold"></span>
+							</div>
+							<pre id="replay-response-body" class="text-xs font-mono text-zinc-300 max-h-40 overflow-auto whitespace-pre-wrap"></pre>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Toast container -->
+	<div id="toast-container" class="fixed bottom-4 right-4 z-[200] space-y-2"></div>
+
+	<script src="/app.js"></script>
+</body>
+</html>
