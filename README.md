@@ -2,6 +2,8 @@
 
 A self-hosted webhook inspection and relay tool. Catch, inspect, and replay HTTP requests in real-time.
 
+Built with Go, PostgreSQL, and WebSockets.
+
 ## Features
 
 - Generate unique webhook endpoints
@@ -9,10 +11,12 @@ A self-hosted webhook inspection and relay tool. Catch, inspect, and replay HTTP
 - View incoming webhooks in real-time via WebSocket
 - Replay/forward webhooks to another URL
 - Full request details: method, headers, body, query params
+- Persistent storage in PostgreSQL
 
 ## Quick Start
 
 ```bash
+export DATABASE_URL=postgresql://user:pass@localhost:5432/webhooks?sslmode=disable
 go build -o webhook-relay .
 ./webhook-relay
 ```
@@ -23,7 +27,7 @@ Open http://localhost:8080 in your browser.
 
 ```bash
 docker build -t webhook-relay .
-docker run -p 8080:8080 webhook-relay
+docker run -p 8080:8080 -e DATABASE_URL=postgresql://user:pass@host:5432/webhooks webhook-relay
 ```
 
 ## Environment Variables
@@ -31,7 +35,7 @@ docker run -p 8080:8080 webhook-relay
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | Server listen port |
-| `DB_PATH` | `webhooks.db` | SQLite database file path |
+| `DATABASE_URL` | *(required)* | PostgreSQL connection string |
 
 ## API
 
