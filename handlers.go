@@ -47,13 +47,10 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	sizeBytes := s.db.SizeBytes()
 	resp := StatsResponse{
 		Uptime:           formatDuration(time.Since(s.startTime)),
 		WebhooksReceived: s.db.TotalRequests(),
 		EndpointCount:    s.db.EndpointCount(),
-		DBSizeBytes:      sizeBytes,
-		DBSizeHuman:      humanBytes(sizeBytes),
 		WSConnections:    s.hub.ConnectionCount(),
 		MemoryMB:         fmt.Sprintf("%.1f", float64(m.Alloc)/(1024*1024)),
 		GoVersion:        runtime.Version(),
@@ -360,15 +357,3 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%ds", seconds)
 }
 
-func humanBytes(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}

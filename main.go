@@ -22,13 +22,8 @@ func main() {
 		port = "8080"
 	}
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "webhooks.db"
-	}
-
 	// Initialize database
-	db, err := NewDB(dbPath)
+	db, err := NewDB()
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}

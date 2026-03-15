@@ -42,8 +42,6 @@ type StatsResponse struct {
 	Uptime           string `json:"uptime"`
 	WebhooksReceived int    `json:"webhooks_received"`
 	EndpointCount    int    `json:"endpoint_count"`
-	DBSizeBytes      int64  `json:"db_size_bytes"`
-	DBSizeHuman      string `json:"db_size_human"`
 	WSConnections    int    `json:"ws_connections"`
 	MemoryMB         string `json:"memory_mb"`
 	GoVersion        string `json:"go_version"`

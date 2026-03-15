@@ -8,28 +8,39 @@ import (
 	"os"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 // DB wraps the sql.DB connection and provides query methods.
 type DB struct {
 	conn *sql.DB
-	path string
 }
 
-// NewDB opens (or creates) the SQLite database and runs migrations.
-func NewDB(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000")
+// NewDB connects to PostgreSQL and runs migrations.
+func NewDB() (*DB, error) {
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	conn, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	conn.SetMaxOpenConns(1)
+	conn.SetMaxOpenConns(10)
+	conn.SetMaxIdleConns(5)
+	conn.SetConnMaxLifetime(5 * time.Minute)
 
-	db := &DB{conn: conn, path: path}
+	if err := conn.Ping(); err != nil {
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+
+	db := &DB{conn: conn}
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	log.Println("connected to PostgreSQL")
 	return db, nil
 }
 
@@ -38,7 +49,7 @@ func (db *DB) migrate() error {
 	CREATE TABLE IF NOT EXISTS endpoints (
 		id         TEXT PRIMARY KEY,
 		name       TEXT NOT NULL DEFAULT '',
-		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
 
 	CREATE TABLE IF NOT EXISTS requests (
@@ -51,7 +62,7 @@ func (db *DB) migrate() error {
 		source_ip    TEXT NOT NULL DEFAULT '',
 		content_type TEXT NOT NULL DEFAULT '',
 		size         INTEGER NOT NULL DEFAULT 0,
-		received_at  DATETIME NOT NULL DEFAULT (datetime('now'))
+		received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_requests_endpoint ON requests(endpoint_id, received_at DESC);
@@ -64,7 +75,7 @@ func (db *DB) migrate() error {
 func (db *DB) CreateEndpoint(id, name string) (*Endpoint, error) {
 	now := time.Now().UTC()
 	_, err := db.conn.Exec(
-		"INSERT INTO endpoints (id, name, created_at) VALUES (?, ?, ?)",
+		"INSERT INTO endpoints (id, name, created_at) VALUES ($1, $2, $3)",
 		id, name, now,
 	)
 	if err != nil {
@@ -84,7 +95,7 @@ func (db *DB) ListEndpoints() ([]Endpoint, error) {
 		SELECT e.id, e.name, e.created_at, COUNT(r.id) as request_count
 		FROM endpoints e
 		LEFT JOIN requests r ON r.endpoint_id = e.id
-		GROUP BY e.id
+		GROUP BY e.id, e.name, e.created_at
 		ORDER BY e.created_at DESC
 	`)
 	if err != nil {
@@ -110,8 +121,8 @@ func (db *DB) GetEndpoint(id string) (*Endpoint, error) {
 		SELECT e.id, e.name, e.created_at, COUNT(r.id) as request_count
 		FROM endpoints e
 		LEFT JOIN requests r ON r.endpoint_id = e.id
-		WHERE e.id = ?
-		GROUP BY e.id
+		WHERE e.id = $1
+		GROUP BY e.id, e.name, e.created_at
 	`, id).Scan(&ep.ID, &ep.Name, &ep.CreatedAt, &ep.RequestCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -124,7 +135,7 @@ func (db *DB) GetEndpoint(id string) (*Endpoint, error) {
 
 // DeleteEndpoint removes an endpoint and all its captured requests.
 func (db *DB) DeleteEndpoint(id string) error {
-	_, err := db.conn.Exec("DELETE FROM endpoints WHERE id = ?", id)
+	_, err := db.conn.Exec("DELETE FROM endpoints WHERE id = $1", id)
 	return err
 }
 
@@ -135,7 +146,7 @@ func (db *DB) SaveRequest(req *WebhookRequest) error {
 
 	_, err := db.conn.Exec(`
 		INSERT INTO requests (id, endpoint_id, method, headers, body, query_params, source_ip, content_type, size, received_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`, req.ID, req.EndpointID, req.Method, string(headersJSON), req.Body,
 		string(paramsJSON), req.SourceIP, req.ContentType, req.Size, req.ReceivedAt)
 	return err
@@ -150,9 +161,9 @@ func (db *DB) ListRequests(endpointID string, limit int) ([]WebhookRequest, erro
 	rows, err := db.conn.Query(`
 		SELECT id, endpoint_id, method, headers, body, query_params, source_ip, content_type, size, received_at
 		FROM requests
-		WHERE endpoint_id = ?
+		WHERE endpoint_id = $1
 		ORDER BY received_at DESC
-		LIMIT ?
+		LIMIT $2
 	`, endpointID, limit)
 	if err != nil {
 		return nil, err
@@ -182,7 +193,7 @@ func (db *DB) GetRequest(id string) (*WebhookRequest, error) {
 	err := db.conn.QueryRow(`
 		SELECT id, endpoint_id, method, headers, body, query_params, source_ip, content_type, size, received_at
 		FROM requests
-		WHERE id = ?
+		WHERE id = $1
 	`, id).Scan(&r.ID, &r.EndpointID, &r.Method, &headersStr, &r.Body, &paramsStr, &r.SourceIP, &r.ContentType, &r.Size, &r.ReceivedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -209,16 +220,6 @@ func (db *DB) EndpointCount() int {
 	var count int
 	db.conn.QueryRow("SELECT COUNT(*) FROM endpoints").Scan(&count)
 	return count
-}
-
-// SizeBytes returns the database file size in bytes.
-func (db *DB) SizeBytes() int64 {
-	info, err := os.Stat(db.path)
-	if err != nil {
-		log.Printf("warning: could not stat db file: %v", err)
-		return 0
-	}
-	return info.Size()
 }
 
 // Close closes the database connection.
