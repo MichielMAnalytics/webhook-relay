@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -21,6 +22,14 @@ func NewDB() (*DB, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	if !strings.Contains(dsn, "sslmode=") {
+		if strings.Contains(dsn, "?") {
+			dsn += "&sslmode=disable"
+		} else {
+			dsn += "?sslmode=disable"
+		}
 	}
 
 	conn, err := sql.Open("postgres", dsn)
